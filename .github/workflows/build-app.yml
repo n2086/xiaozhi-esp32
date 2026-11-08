@@ -3,11 +3,15 @@ name: Build app-only (lichuang-dev)
 # 只编 app-only 固件 xiaozhi.bin，用于 OTA 推送验证。
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/build-app.yml'
+    inputs:
+      version:
+        description: 'PROJECT_VER, e.g. 2.5.3 or 2.6.0'
+        required: true
+        default: '2.5.3'
+      ota_url:
+        description: 'Default CONFIG_OTA_URL'
+        required: true
+        default: 'http://192.168.8.117:8003/xiaozhi/ota/'
 
 permissions:
   contents: read
@@ -22,6 +26,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Apply build-time config
+        shell: bash
+        run: |
+          set -e
+          VER="${{ inputs.version }}"
+          OTA="${{ inputs.ota_url }}"
+          sed -i -E "s|^set\(PROJECT_VER .*\)|set(PROJECT_VER \"${VER}\")|" CMakeLists.txt
+          sed -i -E "s|^    default \"https://api.tenclass.net/xiaozhi/ota/\"|    default \"${OTA}\"|" main/Kconfig.projbuild
+          echo "--- PROJECT_VER ---"
+          grep -n "PROJECT_VER" CMakeLists.txt | head -3
+          echo "--- CONFIG_OTA_URL default ---"
+          grep -n -A3 "config OTA_URL" main/Kconfig.projbuild | head -6
+
       - name: Build lichuang-dev
         shell: bash
         run: |
@@ -29,27 +46,16 @@ jobs:
           idf.py --version
           python scripts/build.py lckfb/szpi-esp32s3 --name lichuang-dev --language zh-CN
 
-      - name: Report firmware size
+      - name: Report sizes
         shell: bash
         run: |
           set -x
-          ls -l build/xiaozhi.bin build/merged-binary.bin build/partition_table/partition-table.bin 2>/dev/null || true
-          for f in build/xiaozhi.bin build/merged-binary.bin; do
-            if [ -f "$f" ]; then
-              sz=$(stat -c %s "$f")
-              mib=$(awk -v s="$sz" 'BEGIN{printf "%.2f", s/1048576}')
-              echo "SIZE $f = $sz bytes = ${mib} MiB"
-            fi
-          done
-          echo "--- partition table ---"
-          python "$IDF_PATH/components/partition_table/gen_esp32part.py" build/partition_table/partition-table.bin || true
-          echo "--- app size limit from sdkconfig ---"
-          grep -E "^CONFIG_PARTITION_TABLE_(CUSTOM|FILENAME)|^CONFIG_ESPTOOLPY_FLASHSIZE" sdkconfig || true
+          ls -l build/xiaozhi.bin build/merged-binary.bin
 
       - name: Upload app-only firmware
         uses: actions/upload-artifact@v7
         with:
-          name: xiaozhi-lichuang-app-only
+          name: xiaozhi-lichuang-app-only-${{ inputs.version }}
           path: |
             build/xiaozhi.bin
             build/merged-binary.bin
