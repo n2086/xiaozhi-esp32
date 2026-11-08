@@ -324,6 +324,27 @@ void McpServer::AddUserOnlyTools() {
                         settings.SetString("download_url", url);
                         return true;
                     });
+
+
+
+    // OTA check url override: NVS wifi/ota_url takes priority over CONFIG_OTA_URL
+    AddUserOnlyTool(
+        "self.system.set_ota_url",
+        "Set the OTA check url stored in NVS (namespace wifi, key ota_url). "
+        "Pass an empty string to erase the key so the built-in CONFIG_OTA_URL is used.",
+        PropertyList({Property("url", kPropertyTypeString)}),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto url = properties["url"].value<std::string>();
+            Settings settings("wifi", true);
+            if (url.empty()) {
+                settings.EraseKey("ota_url");
+                ESP_LOGI(TAG, "ota_url erased, falling back to CONFIG_OTA_URL");
+            } else {
+                settings.SetString("ota_url", url);
+                ESP_LOGI(TAG, "ota_url set to %s", url.c_str());
+            }
+            return true;
+        });
 }
 
 void McpServer::LogToolInventory() const {
