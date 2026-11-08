@@ -59,12 +59,17 @@ std::string Ota::GetCheckVersionUrl() {
     // One-time migration: drop a legacy vendor OTA url left in NVS when this build
     // ships a different default (e.g. self-hosted server). Keeps CONFIG_OTA_URL authoritative
     // until a new url is written through self.system.set_ota_url.
-    if (!url.empty() && url.find("api.tenclass.net") != std::string::npos &&
-        std::string(CONFIG_OTA_URL).find("api.tenclass.net") == std::string::npos) {
-        ESP_LOGW(TAG, "Legacy ota_url '%s' detected, erasing and using %s", url.c_str(),
-                 CONFIG_OTA_URL);
-        settings.EraseKey("ota_url");
-        url.clear();
+    // Run the legacy-url cleanup only once, otherwise a deliberately switched
+    // vendor url (via self.system.set_ota_url) would be erased on every boot.
+    if (!settings.GetBool("ota_migrated", false)) {
+        if (!url.empty() && url.find("api.tenclass.net") != std::string::npos &&
+            std::string(CONFIG_OTA_URL).find("api.tenclass.net") == std::string::npos) {
+            ESP_LOGW(TAG, "Legacy ota_url '%s' detected, erasing and using %s", url.c_str(),
+                     CONFIG_OTA_URL);
+            settings.EraseKey("ota_url");
+            url.clear();
+        }
+        settings.SetBool("ota_migrated", true);
     }
     if (url.empty()) {
         url = CONFIG_OTA_URL;

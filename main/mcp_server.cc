@@ -116,6 +116,29 @@ void McpServer::AddCommonTools() {
     }
 #endif
 
+    // Server switch: NVS wifi/ota_url overrides CONFIG_OTA_URL, effective after reboot.
+    AddTool("self.system.set_ota_url",
+            "切换设备的 OTA 服务器地址（写入 NVS wifi/ota_url，重启后生效）。\n"
+            "Args:\n"
+            "  `url`: 完整 OTA 地址。用户说\"切到官方服务器/官方云端/官方版本\"时用 "
+            "https://api.tenclass.net/xiaozhi/ota/ ；用户说\"切回自建/本地/糖糖服务器\"时用 "
+            "http://192.168.8.117:8003/xiaozhi/ota/ ；传空字符串表示清除覆盖恢复编译默认。\n"
+            "Return:\n"
+            "  true 表示已写入，需调用 self.reboot 重启才能生效。",
+            PropertyList({Property("url", kPropertyTypeString)}),
+            [](const PropertyList& properties) -> ReturnValue {
+                auto url = properties["url"].value<std::string>();
+                Settings settings("wifi", true);
+                if (url.empty()) {
+                    settings.EraseKey("ota_url");
+                    ESP_LOGI(TAG, "ota_url erased, falling back to CONFIG_OTA_URL");
+                } else {
+                    settings.SetString("ota_url", url);
+                    ESP_LOGI(TAG, "ota_url set to %s", url.c_str());
+                }
+                return true;
+            });
+
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), std::make_move_iterator(original_tools.begin()),
                   std::make_move_iterator(original_tools.end()));
@@ -327,24 +350,6 @@ void McpServer::AddUserOnlyTools() {
 
 
 
-    // OTA check url override: NVS wifi/ota_url takes priority over CONFIG_OTA_URL
-    AddUserOnlyTool(
-        "self.system.set_ota_url",
-        "Set the OTA check url stored in NVS (namespace wifi, key ota_url). "
-        "Pass an empty string to erase the key so the built-in CONFIG_OTA_URL is used.",
-        PropertyList({Property("url", kPropertyTypeString)}),
-        [](const PropertyList& properties) -> ReturnValue {
-            auto url = properties["url"].value<std::string>();
-            Settings settings("wifi", true);
-            if (url.empty()) {
-                settings.EraseKey("ota_url");
-                ESP_LOGI(TAG, "ota_url erased, falling back to CONFIG_OTA_URL");
-            } else {
-                settings.SetString("ota_url", url);
-                ESP_LOGI(TAG, "ota_url set to %s", url.c_str());
-            }
-            return true;
-        });
 }
 
 void McpServer::LogToolInventory() const {
