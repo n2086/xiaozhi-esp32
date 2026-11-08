@@ -384,11 +384,12 @@ void Application::ActivationTask() {
     // Create OTA object for activation process
     ota_ = std::make_unique<Ota>();
 
+    // Check for new firmware version first: its response also carries the assets
+    // update descriptor that CheckAssetsVersion consumes.
+    CheckNewVersion();
+
     // Check for new assets version
     CheckAssetsVersion();
-
-    // Check for new firmware version
-    CheckNewVersion();
 
     // Initialize the protocol
     InitializeProtocol();
@@ -414,6 +415,20 @@ void Application::CheckAssetsVersion() {
     }
 
     Settings settings("assets", true);
+
+    // [marvis] adopt assets update delivered by the OTA response
+    if (ota_ && ota_->HasAssets()) {
+        std::string applied = settings.GetString("version");
+        if (applied != ota_->GetAssetsVersion()) {
+            settings.SetString("download_url", ota_->GetAssetsUrl());
+            settings.SetString("version", ota_->GetAssetsVersion());
+            ESP_LOGI(TAG, "Assets update queued: '%s' -> '%s'", applied.c_str(),
+                     ota_->GetAssetsVersion().c_str());
+        } else {
+            ESP_LOGI(TAG, "Assets already up to date: %s", applied.c_str());
+        }
+    }
+
     // Check if there is a new assets need to be downloaded
     std::string download_url = settings.GetString("download_url");
 

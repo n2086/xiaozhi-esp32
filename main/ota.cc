@@ -268,6 +268,23 @@ NetworkResult<> Ota::CheckVersion() {
         ESP_LOGW(TAG, "No firmware section found!");
     }
 
+    // [marvis] assets update section: { "assets": { "version": "...", "url": "..." } }
+    cJSON *assets = cJSON_GetObjectItem(root, "assets");
+    if (cJSON_IsObject(assets)) {
+        cJSON *av = cJSON_GetObjectItem(assets, "version");
+        cJSON *au = cJSON_GetObjectItem(assets, "url");
+        if (cJSON_IsString(av) && av->valuestring) {
+            assets_version_ = av->valuestring;
+        }
+        if (cJSON_IsString(au) && au->valuestring) {
+            assets_url_ = au->valuestring;
+        }
+        has_assets_ = !assets_url_.empty() && !assets_version_.empty();
+        if (has_assets_) {
+            ESP_LOGI(TAG, "Assets available: version %s", assets_version_.c_str());
+        }
+    }
+
     cJSON_Delete(root);
     return {};
 }
